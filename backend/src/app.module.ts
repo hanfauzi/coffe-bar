@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 
@@ -45,9 +45,19 @@ import { ReconciliationsController } from './reconciliations/reconciliations.con
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     PassportModule,
-    JwtModule.register({
-      secret: process.env.JWT_SECRET || 'coffee_secret_key_12345',
-      signOptions: { expiresIn: '7d' },
+    JwtModule.registerAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService) => {
+        const secret = configService.get<string>('JWT_SECRET');
+        if (!secret) {
+          throw new Error('JWT_SECRET must be defined in the configuration.');
+        }
+        return {
+          secret,
+          signOptions: { expiresIn: '7d' },
+        };
+      },
     }),
   ],
   controllers: [

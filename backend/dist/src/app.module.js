@@ -45,9 +45,19 @@ exports.AppModule = AppModule = __decorate([
         imports: [
             config_1.ConfigModule.forRoot({ isGlobal: true }),
             passport_1.PassportModule,
-            jwt_1.JwtModule.register({
-                secret: process.env.JWT_SECRET || 'coffee_secret_key_12345',
-                signOptions: { expiresIn: '7d' },
+            jwt_1.JwtModule.registerAsync({
+                imports: [config_1.ConfigModule],
+                inject: [config_1.ConfigService],
+                useFactory: (configService) => {
+                    const secret = configService.get('JWT_SECRET');
+                    if (!secret) {
+                        throw new Error('JWT_SECRET must be defined in the configuration.');
+                    }
+                    return {
+                        secret,
+                        signOptions: { expiresIn: '7d' },
+                    };
+                },
             }),
         ],
         controllers: [
