@@ -1,0 +1,230 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id        String   @id @default(uuid())
+  username  String   @unique
+  password  String
+  role      String   @default("owner")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Ingredient {
+  id             String                 @id @default(uuid())
+  name           String
+  category       String // "RAW_MATERIAL", "PACKAGING", "OTHER"
+  unit           String // "gram", "ml", "pcs", etc.
+  currentStock   Decimal                @default(0) @db.Decimal(12, 4)
+  minimumStock   Decimal                @default(0) @db.Decimal(12, 4)
+  safetyStock    Decimal                @default(0) @db.Decimal(12, 4)
+  latestUnitCost Decimal                @default(0) @db.Decimal(12, 2)
+  isPackaging    Boolean                @default(false)
+  isActive       Boolean                @default(true)
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+  transactions   InventoryTransaction[]
+  expenseItems   ExpenseItem[]
+  recipeItems    RecipeItem[]
+  batches        IngredientBatch[]
+  reservations   StockReservation[]
+  priceHistories IngredientPriceHistory[]
+}
+
+model IngredientBatch {
+  id             String     @id @default(uuid())
+  ingredientId   String
+  ingredient     Ingredient @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
+  originalStock  Decimal    @db.Decimal(12, 4)
+  remainingStock Decimal    @db.Decimal(12, 4)
+  unitCost       Decimal    @db.Decimal(12, 2)
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+  expenseItemId  String?    @unique
+}
+
+model InventoryTransaction {
+  id               String     @id @default(uuid())
+  ingredientId     String
+  ingredient       Ingredient @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
+  type             String // "PURCHASE", "SALE_USAGE", "PERSONAL_USAGE", "MANUAL_ADJUSTMENT", "WASTE", "CORRECTION"
+  quantityChange   Decimal    @db.Decimal(12, 4)
+  unit             String
+  unitCostSnapshot Decimal    @default(0) @db.Decimal(12, 2)
+  referenceType    String? // "EXPENSE", "SALE", "PERSONAL_CUP", "MANUAL"
+  referenceId      String?
+  notes            String?
+  createdAt        DateTime   @default(now())
+}
+
+model Expense {
+  id          String        @id @default(uuid())
+  date        DateTime      @default(now())
+  supplier    String
+  notes       String?
+  totalAmount Decimal       @default(0) @db.Decimal(12, 2)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  items       ExpenseItem[]
+}
+
+model ExpenseItem {
+  id               String     @id @default(uuid())
+  expenseId        String
+  expense          Expense    @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  ingredientId     String
+  ingredient       Ingredient @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
+  quantity         Decimal    @db.Decimal(12, 4)
+  unit             String
+  totalPrice       Decimal    @db.Decimal(12, 2)
+  unitCostSnapshot Decimal    @db.Decimal(12, 2)
+}
+
+model Menu {
+  id                  String                @id @default(uuid())
+  name                String                @unique
+  defaultSellingPrice Decimal               @db.Decimal(12, 2)
+  category            String                @default("MAIN") // "MAIN" or "ADDITIONAL"
+  active              Boolean               @default(true)
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+  recipes             RecipeItem[]
+  saleItems           SaleItem[]
+  consumptions        PersonalConsumption[]
+  orderItems          OrderItem[]
+}
+
+model RecipeItem {
+  id                       String     @id @default(uuid())
+  menuId                   String
+  menu                     Menu       @relation(fields: [menuId], references: [id], onDelete: Cascade)
+  ingredientId             String
+  ingredient               Ingredient @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
+  quantity                 Decimal    @db.Decimal(12, 4)
+  lessSugarQuantity        Decimal?   @db.Decimal(12, 4) @map("lessSugarQuantity")
+  unit                     String
+  optional                 Boolean    @default(false)
+  canExcludeForPersonalUse Boolean    @default(false) @map("canExcludeForPersonalUse")
+}
+
+model Sale {
+  id           String     @id @default(uuid())
+  saleDate     DateTime   @default(now())
+  totalRevenue Decimal    @db.Decimal(12, 2)
+  totalHpp     Decimal    @db.Decimal(12, 2)
+  grossProfit  Decimal    @db.Decimal(12, 2)
+  notes        String?
+  createdAt    DateTime   @default(now())
+  items        SaleItem[]
+}
+
+model SaleItem {
+  id          String  @id @default(uuid())
+  saleId      String
+  sale        Sale    @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  menuId      String?
+  menu        Menu?   @relation(fields: [menuId], references: [id], onDelete: SetNull)
+  quantity    Decimal @db.Decimal(12, 4)
+  unitPrice   Decimal @db.Decimal(12, 2)
+  customPrice Decimal? @db.Decimal(12, 2)
+  finalPrice  Decimal @db.Decimal(12, 2)
+  hppSnapshot Decimal @db.Decimal(12, 2)
+  notes       String?
+  excludedIngredients String[]
+  sugarLevel  String @default("NORMAL")
+
+  parentItemId String?
+  parentItem   SaleItem?   @relation("SaleItemExtras", fields: [parentItemId], references: [id], onDelete: Cascade)
+  extras       SaleItem[]  @relation("SaleItemExtras")
+}
+
+model PersonalConsumption {
+  id            String   @id @default(uuid())
+  date          DateTime @default(now())
+  menuId        String
+  menu          Menu     @relation(fields: [menuId], references: [id], onDelete: Cascade)
+  estimatedCost Decimal  @db.Decimal(12, 2)
+  useCup        Boolean
+  notes         String?
+  createdAt     DateTime @default(now())
+}
+
+model Order {
+  id            String             @id @default(uuid())
+  orderDate     DateTime           @default(now())
+  customerName  String?
+  status        String             @default("PENDING") // "PENDING", "CONFIRMED", "COMPLETED", "CANCELLED"
+  paymentMethod String?
+  paymentStatus String             @default("PENDING") // "PENDING", "LUNAS", "BELUM_DIBAYAR"
+  resolvedAt    DateTime?
+  notes         String?
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  items         OrderItem[]
+  reservations  StockReservation[]
+}
+
+model OrderItem {
+  id          String   @id @default(uuid())
+  orderId     String
+  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  menuId      String?
+  menu        Menu?    @relation(fields: [menuId], references: [id], onDelete: SetNull)
+  quantity    Decimal  @db.Decimal(12, 4)
+  unitPrice   Decimal  @db.Decimal(12, 2)
+  customPrice Decimal? @db.Decimal(12, 2)
+  finalPrice  Decimal  @db.Decimal(12, 2)
+  notes       String?
+  excludedIngredients String[]
+  sugarLevel  String @default("NORMAL")
+
+  parentItemId String?
+  parentItem   OrderItem?   @relation("OrderItemExtras", fields: [parentItemId], references: [id], onDelete: Cascade)
+  extras       OrderItem[]  @relation("OrderItemExtras")
+}
+
+model StockReservation {
+  id           String     @id @default(uuid())
+  orderId      String
+  order        Order      @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  ingredientId String
+  ingredient   Ingredient @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
+  quantity     Decimal    @db.Decimal(12, 4)
+  createdAt    DateTime   @default(now())
+
+  @@unique([orderId, ingredientId])
+}
+
+model CashReconciliation {
+  id                  String    @id @default(uuid())
+  date                DateTime  @default(now())
+  account             String    // e.g. "Cash", "BCA"
+  systemBalance       Decimal   @db.Decimal(12, 2)
+  actualBalance       Decimal   @db.Decimal(12, 2)
+  difference          Decimal   @db.Decimal(12, 2)
+  reason              String
+  notes               String?
+  adjustTransactionId String?   // Referensi ke ledger kas/stok adjustment
+  createdAt           DateTime  @default(now())
+}
+
+model IngredientPriceHistory {
+  id            String     @id @default(uuid())
+  ingredientId  String
+  ingredient    Ingredient @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
+  date          DateTime   @default(now())
+  supplier      String
+  quantity      Decimal    @db.Decimal(12, 4)
+  unitCost      Decimal    @db.Decimal(12, 2)
+  totalCost     Decimal    @db.Decimal(12, 2)
+  unit          String
+  referenceId   String     // Referensi ke ExpenseItem ID
+  createdAt     DateTime   @default(now())
+}
+
+
