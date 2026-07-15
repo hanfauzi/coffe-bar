@@ -222,7 +222,7 @@ export default function EstimatorPage({ ingredients, menus }: EstimatorPageProps
                 value={selectedMenuId}
                 onChange={(e) => setSelectedMenuId(e.target.value)}
               >
-                <option value="">-- Pilih Menu Saji --</option>
+                <option value="">Pilih Menu Saji</option>
                 {availableMenus.map((m) => (
                   <option key={m.id} value={m.id}>
                     {m.name} ({m.category === 'ADDITIONAL' ? 'Extra' : 'Utama'})
